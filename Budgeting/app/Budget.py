@@ -15,6 +15,41 @@ import plotly.graph_objs as go
 import webbrowser
 from threading import Timer
 
+def initialize_savings_variables():
+    print("Current Working Directory:", os.getcwd())
+    savings = pd.read_csv("app\savings.csv")
+    try:
+        savings["Date"] = pd.to_datetime(savings["Date"], format="%Y-%m-%d")
+    except:
+        savings["Date"] = pd.to_datetime(savings["Date"], format="%d/%m/%Y")
+    # Today's date
+    today = datetime.now().date()
+
+    vanguard = input("Vanguard Investments: ")
+    if vanguard == "":
+        vanguard = savings.loc[savings['Date'].idxmax()]["Vanguard"]
+    fineco_snp = input("Fineco Investments: ")
+    if fineco_snp == "":
+        fineco_snp = savings.loc[savings['Date'].idxmax()]["Fineco"]
+    crypto = input("Crypto Investments: ")
+    if crypto == "":
+        crypto = savings.loc[savings['Date'].idxmax()]["Crypto"]
+    revolut = input("Revolut Total: ")
+    if revolut == "":
+        revolut = savings.loc[savings['Date'].idxmax()]["Revolut"]
+
+    # New row with today's date and specific values for other columns
+    new_row = pd.DataFrame({
+        'Date': [pd.to_datetime(today)],
+        'Vanguard': [vanguard],
+        'Fineco': [fineco_snp],
+        "Crypto":[crypto],
+        "Revolut":[revolut]
+    })
+
+    savings = pd.concat([savings, new_row], ignore_index=True).drop_duplicates()
+    savings.to_csv("app\savings.csv", index=False)
+    return vanguard, fineco_snp, revolut, crypto, savings
 
 def open_statements(bank):
     
@@ -31,14 +66,13 @@ def open_statements(bank):
                 break
             except UnicodeDecodeError:
                 print(f"Failed to decode with {encoding}")
-        print(len(df))
+
         df = group_df(df, bank)
-        print(len(df))
+
         df_lst.append(df)
     
     concatenated_df = pd.concat(df_lst, ignore_index=True)
     concatenated_df = concatenated_df.drop_duplicates()
-    print(len(concatenated_df))
 
     return concatenated_df
 
@@ -141,8 +175,7 @@ def get_group(row):
     "Savings" : ["Vanguard", "Plum"],
     "Other" : ["Metropolitan", "Selecta", "NYX", "Sumup", "Enterprises" "Youngs", "Madame", "Darwen","Mind","doghouse", 
                "ramona", "teg mjr", "la fama", "brondes age", "MOTO DONNINGTON", "Freemount", "Jacks", "Harry", "Kara",
-              "Pommeler", "Enterprises"],
-    "Myself" : ["Revolut", "Sergio Antonelli"]
+              "Pommeler", "Enterprises", "Revolut", "Sergio Antonelli"]
     
     }
     payee = row['Payee']
@@ -155,7 +188,7 @@ def get_group(row):
             return "Bills & Subscriptions"
     elif row['Type'] == "Bank Transfer":
         if "Sergio Antonelli" in row["Payee"] and "Savings" not in payee_groups:
-            return "Myself"
+            return "Other"
         elif row['Total'] < -750:
             return "Accommodation"
         elif row["Total"] < 0:
@@ -200,6 +233,30 @@ def split_statement(df):
 
 def monthly_split(df, time_period = "Year-Month"):
     return df.groupby(by=[time_period, "Group"])["Total"].sum().reset_index()
+
+def savings_visualized(df):
+    df = df.drop('Revolut', axis=1)
+    df["Total"] = df.drop('Date', axis=1).sum(axis=1)
+    df = df.melt(id_vars=["Date"], var_name = "Asset")
+    # Create the line graph using Plotly
+    fig = px.line(
+        df,
+        x='Date',
+        y='value',
+        color = "Asset",
+        title='Cumulative savings over time',
+        labels={'Date': 'Date', 'Total': 'Total Savings'},
+        markers=True
+    )
+
+    fig.update_layout(
+        xaxis_title="Date",
+        yaxis_title="Total Savings",
+        hovermode="x unified"
+    )
+
+    # Show the plot
+    return fig
 
 
 def visualize_expenses(df):
@@ -323,12 +380,12 @@ def visualize_cumulative_spend(df, initial):
     return fig
 
 def spent_this_month(df):
-    curr = curr_year = str(datetime.today().year) + "-" + str(datetime.today().month).zfill(2)
+    curr = str(datetime.today().year) + "-" + str(datetime.today().month).zfill(2)
     current_spent_month = df[df["Year-Month"] == curr]
     current_spent_month = current_spent_month[~current_spent_month["Group"].isin(["Savings", "Myself", "Accommodation"])]
     return current_spent_month["Total"].sum()
 
-def create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3, str4):
+def create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3, str4, savings_fig):
     app = dash.Dash(__name__)
 
     # Define the layout of the dashboard
@@ -353,6 +410,11 @@ def create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3
             id='cumulative_spend',
             figure=cumulative_spend
         ),
+        
+        dcc.Graph(
+            id='cumulative_savings',
+            figure=savings_fig
+        ),
 
         html.Div(children=[
             html.P(str1),
@@ -364,7 +426,8 @@ def create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3
 
     return app
 
-def run_full_pipeline(Vanguard, Fineco_snp, Revolut, Revolut_crypto):
+def run_full_pipeline():
+    Vanguard, Fineco_snp, Revolut, Revolut_crypto, savings = initialize_savings_variables()
     initial, add_ons, total_portfolio = measure_inits(Vanguard, Fineco_snp, Revolut, Revolut_crypto)
     hsbc = open_statements("hsbc")
     fineco = open_statements("fineco")
@@ -382,10 +445,11 @@ def run_full_pipeline(Vanguard, Fineco_snp, Revolut, Revolut_crypto):
     monthly_spend = visualize_expenses(agg_expenses)
     monthly_income = visualize_income(agg_income)
     cumulative_spend = visualize_cumulative_spend(statements, initial)
+    savings_fig = savings_visualized(savings)
     spent = spent_this_month(expenses)
     str1 = "Average monthly spend is " + str(round(OUT)) + "£, Average monthly income is " + str(round(IN)) +  "£"
     str2 = str(round(spent)) + "£ Spent This Month (no savings, revolut or accommodation)"
     str3 = "Current total is " + str(round(current_total(statements, add_ons+initial))) + "£"
     str4 = "Current Portfolio is " + str(round(total_portfolio)) + "£"
-    app = create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3, str4)
+    app = create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3, str4, savings_fig)
     return app

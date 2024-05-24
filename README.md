@@ -5,4 +5,6 @@ Ribosome Project - My first completed project in my programming journey. A tool 
 
 CDS-Pipeline - A project completed during the taught component of my Master's degree. A pipeline for Transcriptome analysis of Trypanosoma congolense and it's protein-coding regions (CDS).
 
+Budgeting - An app I built to sort through my finances.
+
 Thesis - My write-up for my research component of my Master's degree. 'A Model Comparison Approach for the Collective Decision-making of Fish'.

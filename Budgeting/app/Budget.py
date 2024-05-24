@@ -9,11 +9,12 @@ from sklearn.pipeline import Pipeline
 import plotly.express as px
 from datetime import datetime
 import dash
-from dash import dcc, html
+from dash import dcc, html, dash_table
 from dash.dependencies import Input, Output
 import plotly.graph_objs as go
 import webbrowser
 from threading import Timer
+
 
 def initialize_savings_variables():
     print("Current Working Directory:", os.getcwd())
@@ -385,7 +386,16 @@ def spent_this_month(df):
     current_spent_month = current_spent_month[~current_spent_month["Group"].isin(["Savings", "Myself", "Accommodation"])]
     return current_spent_month["Total"].sum()
 
-def create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3, str4, savings_fig):
+def top_spends(df):
+    df = df.groupby(by=["Year-Month", "Payee", "Type", "Group"])["Total"].sum().reset_index()
+    df = df.sort_values(['Year-Month', 'Total'], ascending=[True, False]) \
+                 .groupby('Year-Month') \
+                 .head(5) \
+                 .reset_index(drop=True)
+    return df
+
+
+def create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3, str4, savings_fig, top_spent):
     app = dash.Dash(__name__)
 
     # Define the layout of the dashboard
@@ -395,6 +405,13 @@ def create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3
         html.Div(children='''
             Quick picture of recent and current finances.
         '''),
+
+        html.Div(children=[
+            html.P(str1),
+            html.P(str2),
+            html.P(str3),
+            html.P(str4)
+        ]),
 
         dcc.Graph(
             id='spent_monthly',
@@ -416,12 +433,17 @@ def create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3
             figure=savings_fig
         ),
 
-        html.Div(children=[
-            html.P(str1),
-            html.P(str2),
-            html.P(str3),
-            html.P(str4)
-        ])
+        dash_table.DataTable(
+        id='table',
+        columns=[{"name": i, "id": i} for i in top_spent.columns],
+        data=top_spent.to_dict('records'),
+        style_table={'overflowX': 'auto'},
+        style_cell={
+            'height': 'auto',
+            'minWidth': '140px', 'width': '140px', 'maxWidth': '140px',
+            'whiteSpace': 'normal'
+        },
+        )
     ])
 
     return app
@@ -447,9 +469,10 @@ def run_full_pipeline():
     cumulative_spend = visualize_cumulative_spend(statements, initial)
     savings_fig = savings_visualized(savings)
     spent = spent_this_month(expenses)
+    top_5 = top_spends(expenses)
     str1 = "Average monthly spend is " + str(round(OUT)) + "£, Average monthly income is " + str(round(IN)) +  "£"
     str2 = str(round(spent)) + "£ Spent This Month (no savings, revolut or accommodation)"
     str3 = "Current total is " + str(round(current_total(statements, add_ons+initial))) + "£"
     str4 = "Current Portfolio is " + str(round(total_portfolio)) + "£"
-    app = create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3, str4, savings_fig)
+    app = create_app(monthly_spend, monthly_income, cumulative_spend, str1, str2, str3, str4, savings_fig, top_5)
     return app

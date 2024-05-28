@@ -50,7 +50,7 @@ def initialize_savings_variables():
 
     savings = pd.concat([savings, new_row], ignore_index=True).drop_duplicates()
     savings.to_csv("app\savings.csv", index=False)
-    return vanguard, fineco_snp, revolut, crypto, savings
+    return float(vanguard), float(fineco_snp), float(revolut), float(crypto), savings
 
 def open_statements(bank):
     
@@ -388,7 +388,7 @@ def spent_this_month(df):
 
 def top_spends(df):
     df = df.groupby(by=["Year-Month", "Payee", "Type", "Group"])["Total"].sum().reset_index()
-    df = df.sort_values(['Year-Month', 'Total'], ascending=[True, False]) \
+    df = df.sort_values(['Year-Month', 'Total'], ascending=[False, False]) \
                  .groupby('Year-Month') \
                  .head(5) \
                  .reset_index(drop=True)

@@ -204,6 +204,9 @@ def get_group(row):
     elif row['Type'] == "Bank Fees":
         return "Bills & Subscriptions"
     
+    if row["Total"] > 0 and payee_group not in ["Salary", "Friends IN", "Dad", "Mom"]:
+        return "Refunds / Returns"
+    
     if payee_group == None:
         return "Unclassified"
     
